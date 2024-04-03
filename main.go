@@ -47,11 +47,15 @@ func main() {
 	}
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &logOpts)))
 
-	var p, err = createProject(base, ignores.values)
+	var p, err = newProject(base)
 	if err != nil {
 		slog.Error("createProject failure", "directory", base, "error", err)
 		os.Exit(1)
 	}
+	p.ignores = ignores.values
+	slog.Debug(fmt.Sprintf("project created: %#v", p))
+
+	p.scanAll()
 
 	// Print out tree view first
 	fmt.Printf("Contents of %s:\n", base)

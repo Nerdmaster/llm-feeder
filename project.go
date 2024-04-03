@@ -27,12 +27,22 @@ type project struct {
 	root    *fsEntry
 }
 
-// createProject populates the project data with metadata about its base path
-func createProject(base string, ignores []string) (*project, error) {
-	var p = &project{ignores: ignores, root: &fsEntry{name: "<root>", path: base, isDir: true}}
-	slog.Debug(fmt.Sprintf("project created: %#v", p))
-	var err = p.scan(p.root)
-	return p, err
+func newProject(base string) (*project, error) {
+	var err error
+	base, err = filepath.Abs(base)
+	if err != nil {
+		return nil, fmt.Errorf("invalid project path: %w", err)
+	}
+	var i os.FileInfo
+	i, err = os.Stat(base)
+	if err != nil {
+		return nil, fmt.Errorf("invalid project path: %w", err)
+	}
+	if !i.IsDir() {
+		return nil, fmt.Errorf("invalid project path: not a directory")
+	}
+
+	return &project{root: &fsEntry{name: "<root>", path: base, isDir: true}}, nil
 }
 
 // shouldIgnore checks if an entry should be ignored
@@ -46,7 +56,9 @@ func (p *project) shouldIgnore(pth string) bool {
 	return false
 }
 
-func (p *project) scan(e *fsEntry) error {
+// scan looks for all dir entries inside e's path and adds them recursively to
+// its list, using the given ignore function to potentially skip some files
+func (e *fsEntry) scan(ignore func(string) bool) error {
 	var entries, err = os.ReadDir(e.path)
 	if err != nil {
 		return err
@@ -56,7 +68,7 @@ func (p *project) scan(e *fsEntry) error {
 		var name = entry.Name()
 		var fullPath = filepath.Join(e.path, name)
 		var relPath = filepath.Join(e.relative, name)
-		if p.shouldIgnore(relPath) || p.shouldIgnore(name) {
+		if ignore(relPath) || ignore(name) {
 			slog.Debug("ignoring entry per ignore list", "path", fullPath)
 			continue
 		}
@@ -68,10 +80,16 @@ func (p *project) scan(e *fsEntry) error {
 
 		if entry.IsDir() {
 			newEntry.isDir = true
-			p.scan(newEntry)
+			newEntry.scan(ignore)
 		}
 	}
 
 	e.sortEntries()
 	return nil
+}
+
+// scanAll looks for all files that don't match one of the ignore patterns, and
+// puts it into the project entries
+func (p *project) scanAll() error {
+	return p.root.scan(p.shouldIgnore)
 }
