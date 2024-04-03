@@ -35,11 +35,14 @@ func main() {
 	flag.BoolVar(&verbose, "verbose", false, "Verbose output")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [-i <pattern to ignore>] [-d <base directory>] [-q]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [-i <pattern to ignore>] [-d <base directory>] [-q] [file1] [file2] [fileN...]\n", os.Args[0])
 		fmt.Fprintln(os.Stderr, "Options:")
 		flag.PrintDefaults()
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "If a list of files is given, only those are processed, and they're considered relative to the base directory.")
 	}
 	flag.Parse()
+	var includes = flag.Args()
 
 	var logOpts = slog.HandlerOptions{Level: slog.LevelInfo}
 	if verbose {
@@ -53,9 +56,15 @@ func main() {
 		os.Exit(1)
 	}
 	p.ignores = ignores.values
-	slog.Debug(fmt.Sprintf("project created: %#v", p))
 
-	p.scanAll()
+	if len(includes) > 0 {
+		err = p.addFiles(includes)
+	} else {
+		err = p.scanAll()
+	}
+	if err != nil {
+		slog.Error("Unable to read project", "error", err)
+	}
 
 	// Print out tree view first
 	fmt.Printf("Contents of %s:\n", base)

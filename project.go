@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 type fsEntry struct {
@@ -92,4 +93,44 @@ func (e *fsEntry) scan(ignore func(string) bool) error {
 // puts it into the project entries
 func (p *project) scanAll() error {
 	return p.root.scan(p.shouldIgnore)
+}
+
+// addFiles analyzes all paths given, unless they're in the ignore list, and
+// puts them into the project entries
+func (p *project) addFiles(paths []string) error {
+	slog.Debug("Manually adding files", "paths", paths)
+	var dirmap = make(map[string]*fsEntry)
+	for _, filename := range paths {
+		// Make sure filenames are all relative to the base while also getting /
+		// cleaning the relative path
+		var fullpath, err = filepath.Abs(filename)
+		if err != nil {
+			return fmt.Errorf("unable to determine full path for %q: %s", filename, err)
+		}
+
+		var relpath string
+		relpath, err = filepath.Rel(p.root.path, fullpath)
+		if err != nil {
+			return fmt.Errorf("%q is not relative to %q", filename, p.root.path)
+		}
+
+		// Create the FS structure for all path parts
+		var dir, file = filepath.Split(relpath)
+		var parts = strings.Split(dir, "/")
+		var parent = p.root
+		for _, part := range parts {
+			var subpath = filepath.Join(parent.relative, part)
+			if dirmap[subpath] == nil {
+				var dirEntry = &fsEntry{name: part, relative: subpath, path: filepath.Join(parent.path, part), isDir: true}
+				dirmap[subpath] = dirEntry
+				parent.entries = append(parent.entries, dirEntry)
+			}
+			parent = dirmap[subpath]
+		}
+
+		var e = &fsEntry{name: file, relative: relpath, path: filepath.Join(p.root.path, relpath)}
+		parent.entries = append(parent.entries, e)
+	}
+
+	return nil
 }
