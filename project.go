@@ -116,6 +116,10 @@ func (p *project) addFiles(paths []string) error {
 
 		// Create the FS structure for all path parts *after* root
 		var dir, file = filepath.Split(relpath)
+		if p.shouldIgnore(relpath) || p.shouldIgnore(file) {
+			slog.Debug("ignoring entry per ignore list", "path", fullpath)
+			continue
+		}
 		var parts = strings.Split(dir, "/")
 		var parent = p.root
 		for _, part := range parts {
