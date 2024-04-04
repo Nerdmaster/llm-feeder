@@ -114,11 +114,15 @@ func (p *project) addFiles(paths []string) error {
 			return fmt.Errorf("%q is not relative to %q", filename, p.root.path)
 		}
 
-		// Create the FS structure for all path parts
+		// Create the FS structure for all path parts *after* root
 		var dir, file = filepath.Split(relpath)
 		var parts = strings.Split(dir, "/")
 		var parent = p.root
 		for _, part := range parts {
+			if part == "" {
+				continue
+			}
+			slog.Debug("Creating dir entry", "name", part, "relativePath", relpath)
 			var subpath = filepath.Join(parent.relative, part)
 			if dirmap[subpath] == nil {
 				var dirEntry = &fsEntry{name: part, relative: subpath, path: filepath.Join(parent.path, part), isDir: true}
